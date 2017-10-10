@@ -29,25 +29,25 @@ class LaneLines:
         # 4. Apply Canny edge detection
         edges = self.canny(blur_gray, 50, 100)
 
-        # 5. Apply Hough on edge detected image
+        # 5. Define a four side polygon to mask
+        vertices = np.array([[(449, 290), (503, 295), (890, 537), (84, 537)]], dtype=np.int32)
+        masked_edges = self.region_of_interest(edges, vertices)
+
+        # 6. Apply Hough on edge detected image
         rho = 1
         theta = np.pi / 180
         threshold = 1
-        min_line_len = 10
+        min_line_len = 15
         max_line_gap = 10
 
-        # make a copy
-        lines = self.hough_lines(edges, rho, theta, threshold, min_line_len, max_line_gap)
+        lines_image = self.hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap)
 
-        # iterate over the lines
-        for line in lines:
-            for x1, y1, x2, y2 in line:
-                print(x1)
-                print(y1)
-                print(x2)
-                print(y2)
+        # Combine the lines image with the lines image
+        lines_edges = cv2.addWeighted(image, 1, lines_image, 1, 0)
 
-        plt.imshow(edges, cmap="gray")
+        masked_lines_edges = self.region_of_interest(lines_edges, vertices)
+
+        plt.imshow(masked_lines_edges)
         plt.show()
 
     # Helper functions
@@ -111,9 +111,52 @@ class LaneLines:
         If you want to make the lines semi-transparent, think about combining
         this function with the weighted_img() function below
         """
+        left_lines = []
+        right_lines = []
+
+        lower_slope_threshold = 0.62
+        upper_slope_threshold = 0.70
+        epsilon = 10 ** -7
+
         for line in lines:
             for x1, y1, x2, y2 in line:
-                cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+                slope = ((y2 - y1) / (x2 - x1 + epsilon))
+
+                if lower_slope_threshold <= slope <= upper_slope_threshold:
+                    left_lines.append(line)
+
+                if -upper_slope_threshold <= slope <= -lower_slope_threshold:
+                    right_lines.append(line)
+
+        self.polyfit_line(left_lines, img, color, thickness)
+        self.polyfit_line(right_lines, img, color, thickness)
+
+    def polyfit_line(self, lines, img, color, thickness):
+        xs = []
+        ys = []
+
+        for line in lines:
+            for x1, y1, x2, y2 in line:
+                # collect all the x and y
+                xs.append(x1)
+                ys.append(y1)
+
+                xs.append(x2)
+                ys.append(y2)
+
+        # find the best fit line
+        [m, c] = np.polyfit(np.array(xs, dtype="float"),
+                            np.array(ys, dtype="float"), deg=1)
+
+        y_size = img.shape[0]
+
+        left_y1 = 0
+        left_x1 = int(-c / m)
+
+        left_y2 = int(y_size)
+        left_x2 = int((y_size - c) / m)
+
+        cv2.line(img, (left_x1, left_y1), (left_x2, left_y2), color, thickness)
 
     def hough_lines(self, img, rho, theta, threshold, min_line_len, max_line_gap):
         """
@@ -121,7 +164,8 @@ class LaneLines:
 
         Returns an image with hough lines drawn.
         """
-        lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len,
+        lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]),
+                                minLineLength=min_line_len,
                                 maxLineGap=max_line_gap)
         line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
 
