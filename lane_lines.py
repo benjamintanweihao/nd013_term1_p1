@@ -1,3 +1,4 @@
+# coding=utf-8
 import cv2
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
@@ -5,10 +6,11 @@ import numpy as np
 import sys
 from moviepy.editor import VideoFileClip
 
+
 # TODO: Make sure color of lane markings. Also account for shadows
 
 class LaneLines:
-    """ Finding lane lines on the road"""
+    """ Find lane lines on the road"""
 
     def process_image(self, image):
         """Reads an image from `image_path` and outputs another image
@@ -28,24 +30,24 @@ class LaneLines:
 
         # 4. Define a polygon to mask
         apex_x = int(0.5 * x_size)
-        apex_y = int(0.54 * y_size)
+        apex_y = int(0.55 * y_size)
 
-        # bottom_left_x = 0
-        bottom_left_x = int(0.11 * x_size)
+        bottom_left_x = 0
         bottom_left_y = y_size
 
-        bottom_right_x = int(x_size * 0.89)
+        bottom_right_x = x_size
         bottom_right_y = y_size
 
-        vertices = np.array([[(apex_x, apex_y), (bottom_left_x, bottom_left_y), (bottom_right_x, bottom_right_y)]], dtype=np.int32)
+        vertices = np.array([[(apex_x, apex_y), (bottom_left_x, bottom_left_y), (bottom_right_x, bottom_right_y)]],
+                            dtype=np.int32)
         masked_edges = self.region_of_interest(edges, vertices)
 
         # 5. Apply Hough on edge detected image
         rho = 1
-        theta = np.pi / 180
-        threshold = 1
-        min_line_len = 8
-        max_line_gap = 4
+        theta = np.pi / 60 # <-
+        threshold = 30 # <- so useful!
+        min_line_len = 16
+        max_line_gap = 2
 
         lines_image = self.hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap)
 
@@ -63,8 +65,6 @@ class LaneLines:
         (assuming your grayscaled image is called 'gray')
         you should call plt.imshow(gray, cmap='gray')"""
         return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        # Or use BGR2GRAY if you read an image with cv2.imread()
-        # return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     def canny(self, img, low_threshold, high_threshold):
         """Applies the Canny transform"""
@@ -119,22 +119,21 @@ class LaneLines:
         left_lines = []
         right_lines = []
 
-        lower_slope_threshold = 0.54
-        upper_slope_threshold = 0.90
-
         epsilon = 10 ** -7
 
         slopes = []
 
         for line in lines:
             for x1, y1, x2, y2 in line:
-                slope = ((y2 - y1) / (x2 - x1 + epsilon))
+                slope = ((y2 - y1) / (x2 - x1))
                 slopes.append(slope)
 
-                if lower_slope_threshold <= slope <= upper_slope_threshold:
-                    right_lines.append(line)
+                if abs(slope) < 0.5:
+                    continue
 
-                elif -upper_slope_threshold <= slope <= -lower_slope_threshold:
+                if slope < 0:
+                    right_lines.append(line)
+                else:
                     left_lines.append(line)
 
         self.polyfit_line(left_lines, img, color, thickness)
@@ -165,15 +164,17 @@ class LaneLines:
                     start_y = y2
 
         # find the best fit line
-        [m, c] = np.polyfit(np.array(xs, dtype="float"),
-                            np.array(ys, dtype="float"), deg=1)
 
-        y_size = img.shape[0]
+        if xs and ys:
+            [m, c] = np.polyfit(np.array(xs, dtype="float"),
+                                np.array(ys, dtype="float"), deg=1)
 
-        end_x = int((y_size - c) / m)
-        end_y = y_size
+            y_size = img.shape[0]
 
-        cv2.line(img, (start_x, start_y), (end_x, end_y), color, thickness)
+            end_x = int((y_size - c) / m)
+            end_y = y_size
+
+            cv2.line(img, (start_x, start_y), (end_x, end_y), color, thickness)
 
     def hough_lines(self, img, rho, theta, threshold, min_line_len, max_line_gap):
         """
@@ -214,6 +215,7 @@ def process_image(path):
     plt.imshow(processed_image)
     plt.show()
 
+
 def process_video(video_file_name):
     ll = LaneLines()
     output = 'test_videos_output/' + video_file_name
@@ -227,10 +229,13 @@ def process_video(video_file_name):
 # process_image("test_images/solidYellowCurve.jpg")
 # process_image("test_images/solidYellowCurve2.jpg")
 # process_image("test_images/solidYellowLeft.jpg")
-process_image("test_images/challenge/challenge4.jpg") # <--- Fix this
+# process_image("test_images/challenge/challenge4.jpg")
+# process_image("test_images/challenge/challenge6.jpg")
+# process_image("test_images/challenge/challenge7.jpg")
+# process_image("test_images/challenge/challenge8.jpg")
+# process_image("test_images/challenge/challenge9.jpg")
 
-
-# process_video("solidWhiteRight.mp4")
+process_video("solidWhiteRight.mp4")
 # process_video("solidYellowLeft.mp4")
 # process_video("challenge.mp4")
 
