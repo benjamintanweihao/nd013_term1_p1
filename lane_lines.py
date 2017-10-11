@@ -1,16 +1,16 @@
 import cv2
-import math
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+import sys
+from scipy import stats
 
 
 class LaneLines:
     """ Finding lane lines on the road"""
 
     # TODO: change `image_path` to *NOT* hardcode
-    def __init__(self, image_path="test_images/solidWhiteRight.jpg"):
+    def __init__(self, image_path="test_images/solidWhiteCurve.jpg"):
         self.image_path = image_path
 
     def process(self):
@@ -43,11 +43,10 @@ class LaneLines:
         lines_image = self.hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap)
 
         # Combine the lines image with the lines image
-        lines_edges = cv2.addWeighted(image, 1, lines_image, 1, 0)
+        lines_edges = cv2.addWeighted(image, 0.6, lines_image, 1, 0)
 
-        masked_lines_edges = self.region_of_interest(lines_edges, vertices)
-
-        plt.imshow(masked_lines_edges)
+        # plt.imshow(masked_edges)
+        plt.imshow(lines_edges)
         plt.show()
 
     # Helper functions
@@ -94,7 +93,7 @@ class LaneLines:
         masked_image = cv2.bitwise_and(img, mask)
         return masked_image
 
-    def draw_lines(self, img, lines, color=[255, 0, 0], thickness=2):
+    def draw_lines(self, img, lines, color=[255, 0, 0], thickness=6):
         """
         NOTE: this is the function you might want to use as a starting point once you want to
         average/extrapolate the line segments you detect to map out the full
@@ -114,19 +113,27 @@ class LaneLines:
         left_lines = []
         right_lines = []
 
-        lower_slope_threshold = 0.62
-        upper_slope_threshold = 0.70
+        # NOTE: Most likely we need to passes at the slope!
+        lower_slope_threshold = 0.50
+        upper_slope_threshold = 0.80
+
         epsilon = 10 ** -7
+
+        slopes = []
 
         for line in lines:
             for x1, y1, x2, y2 in line:
                 slope = ((y2 - y1) / (x2 - x1 + epsilon))
+                slopes.append(slope)
 
                 if lower_slope_threshold <= slope <= upper_slope_threshold:
-                    left_lines.append(line)
+                    right_lines.append(line)
 
                 if -upper_slope_threshold <= slope <= -lower_slope_threshold:
-                    right_lines.append(line)
+                    left_lines.append(line)
+
+        print("slopes =", sorted(slopes))
+        print(stats.mode(slopes))
 
         self.polyfit_line(left_lines, img, color, thickness)
         self.polyfit_line(right_lines, img, color, thickness)
@@ -134,6 +141,9 @@ class LaneLines:
     def polyfit_line(self, lines, img, color, thickness):
         xs = []
         ys = []
+
+        start_x = sys.maxsize
+        start_y = sys.maxsize
 
         for line in lines:
             for x1, y1, x2, y2 in line:
@@ -144,19 +154,24 @@ class LaneLines:
                 xs.append(x2)
                 ys.append(y2)
 
+                if y1 < y2 and y1 < start_y:
+                    start_x = x1
+                    start_y = y1
+
+                if y2 < y1 < start_y:
+                    start_x = x2
+                    start_y = y2
+
         # find the best fit line
         [m, c] = np.polyfit(np.array(xs, dtype="float"),
                             np.array(ys, dtype="float"), deg=1)
 
         y_size = img.shape[0]
 
-        left_y1 = 0
-        left_x1 = int(-c / m)
+        end_x = int((y_size - c) / m)
+        end_y = y_size
 
-        left_y2 = int(y_size)
-        left_x2 = int((y_size - c) / m)
-
-        cv2.line(img, (left_x1, left_y1), (left_x2, left_y2), color, thickness)
+        cv2.line(img, (start_x, start_y), (end_x, end_y), color, thickness)
 
     def hough_lines(self, img, rho, theta, threshold, min_line_len, max_line_gap):
         """
