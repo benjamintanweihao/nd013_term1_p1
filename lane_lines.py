@@ -10,7 +10,7 @@ class LaneLines:
     """ Finding lane lines on the road"""
 
     # TODO: change `image_path` to *NOT* hardcode
-    def __init__(self, image_path="test_images/solidWhiteCurve.jpg"):
+    def __init__(self, image_path="test_images/solidYellowLeft.jpg"):
         self.image_path = image_path
 
     def process(self):
@@ -30,7 +30,7 @@ class LaneLines:
         edges = self.canny(blur_gray, 50, 100)
 
         # 5. Define a four side polygon to mask
-        vertices = np.array([[(449, 290), (503, 295), (890, 537), (84, 537)]], dtype=np.int32)
+        vertices = np.array([[(460, 320), (503, 320), (890, 537), (120, 537)]], dtype=np.int32)
         masked_edges = self.region_of_interest(edges, vertices)
 
         # 6. Apply Hough on edge detected image
