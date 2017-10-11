@@ -4,36 +4,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 from scipy import stats
+from moviepy.editor import VideoFileClip
 
+# TODO: Make sure color of lane markings. Also account for shadows
+# TODO: Cannot hardcode the region mask. Find something more general
 
 class LaneLines:
     """ Finding lane lines on the road"""
 
-    # TODO: change `image_path` to *NOT* hardcode
-    def __init__(self, image_path="test_images/solidYellowLeft.jpg"):
-        self.image_path = image_path
-
-    def process(self):
+    def process_image(self, image):
         """Reads an image from `image_path` and outputs another image
         with the lane markings."""
 
-        # 1. Read the image
-        image = mpimg.imread(self.image_path)
-
-        # 2. Convert image to grayscale
+        # 1. Convert image to grayscale
         gray = self.grayscale(image)
 
-        # 3. Apply Gaussian smoothing
+        # 2. Apply Gaussian smoothing
         blur_gray = self.gaussian_blur(gray, 5)
 
-        # 4. Apply Canny edge detection
+        # 3. Apply Canny edge detection
         edges = self.canny(blur_gray, 50, 100)
 
-        # 5. Define a four side polygon to mask
+        # 4. Define a four side polygon to mask
         vertices = np.array([[(460, 320), (503, 320), (890, 537), (120, 537)]], dtype=np.int32)
         masked_edges = self.region_of_interest(edges, vertices)
 
-        # 6. Apply Hough on edge detected image
+        # 5. Apply Hough on edge detected image
         rho = 1
         theta = np.pi / 180
         threshold = 1
@@ -42,12 +38,10 @@ class LaneLines:
 
         lines_image = self.hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap)
 
-        # Combine the lines image with the lines image
-        lines_edges = cv2.addWeighted(image, 0.6, lines_image, 1, 0)
+        # 6. Combine the lines image with the lines image
+        lines_edges = self.weighted_img(lines_image, image)
 
-        # plt.imshow(masked_edges)
-        plt.imshow(lines_edges)
-        plt.show()
+        return lines_edges
 
     # Helper functions
 
@@ -206,4 +200,32 @@ class LaneLines:
 
 
 ll = LaneLines()
-ll.process()
+image = mpimg.imread("test_images/challenge/challenge0.jpg")
+processed_image = ll.process_image(image)
+
+plt.imshow(processed_image)
+plt.show()
+
+# Solid White
+# white_output = 'test_videos_output/solidWhiteRight.mp4'
+# clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
+# white_clip = clip1.fl_image(ll.process_image)
+# white_clip.write_videofile(white_output, audio=False)
+
+# Solid Yellow
+# yellow_output = 'test_videos_output/solidYellowLeft.mp4'
+# clip2 = VideoFileClip("test_videos/solidYellowLeft.mp4")
+# yellow_clip = clip2.fl_image(ll.process_image)
+# yellow_clip.write_videofile(yellow_output, audio=False)
+
+# Challenge
+
+# challenge_output = 'test_videos_output/challenge.mp4'
+# clip3 = VideoFileClip("test_videos/challenge.mp4")
+#
+# for t in range(0, 10):
+#     img_path = "test_images/challenge" + str(t) + ".jpg"
+#     clip3.save_frame(img_path, t)
+
+# challenge_clip = clip3.fl_image(ll.process_image)
+# challenge_clip.write_videofile(challenge_output, audio=False)
