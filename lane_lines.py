@@ -3,11 +3,9 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
-from scipy import stats
 from moviepy.editor import VideoFileClip
 
 # TODO: Make sure color of lane markings. Also account for shadows
-# TODO: Cannot hardcode the region mask. Find something more general
 
 class LaneLines:
     """ Finding lane lines on the road"""
@@ -15,6 +13,9 @@ class LaneLines:
     def process_image(self, image):
         """Reads an image from `image_path` and outputs another image
         with the lane markings."""
+
+        y_size = image.shape[0]
+        x_size = image.shape[1]
 
         # 1. Convert image to grayscale
         gray = self.grayscale(image)
@@ -25,16 +26,26 @@ class LaneLines:
         # 3. Apply Canny edge detection
         edges = self.canny(blur_gray, 50, 100)
 
-        # 4. Define a four side polygon to mask
-        vertices = np.array([[(460, 320), (503, 320), (890, 537), (120, 537)]], dtype=np.int32)
+        # 4. Define a polygon to mask
+        apex_x = int(0.5 * x_size)
+        apex_y = int(0.54 * y_size)
+
+        # bottom_left_x = 0
+        bottom_left_x = int(0.11 * x_size)
+        bottom_left_y = y_size
+
+        bottom_right_x = int(x_size * 0.89)
+        bottom_right_y = y_size
+
+        vertices = np.array([[(apex_x, apex_y), (bottom_left_x, bottom_left_y), (bottom_right_x, bottom_right_y)]], dtype=np.int32)
         masked_edges = self.region_of_interest(edges, vertices)
 
         # 5. Apply Hough on edge detected image
         rho = 1
         theta = np.pi / 180
         threshold = 1
-        min_line_len = 15
-        max_line_gap = 10
+        min_line_len = 8
+        max_line_gap = 4
 
         lines_image = self.hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap)
 
@@ -85,9 +96,10 @@ class LaneLines:
 
         # returning the image only where mask pixels are nonzero
         masked_image = cv2.bitwise_and(img, mask)
+
         return masked_image
 
-    def draw_lines(self, img, lines, color=[255, 0, 0], thickness=6):
+    def draw_lines(self, img, lines, color=[255, 0, 0], thickness=8):
         """
         NOTE: this is the function you might want to use as a starting point once you want to
         average/extrapolate the line segments you detect to map out the full
@@ -107,9 +119,8 @@ class LaneLines:
         left_lines = []
         right_lines = []
 
-        # NOTE: Most likely we need to passes at the slope!
-        lower_slope_threshold = 0.50
-        upper_slope_threshold = 0.80
+        lower_slope_threshold = 0.54
+        upper_slope_threshold = 0.90
 
         epsilon = 10 ** -7
 
@@ -123,11 +134,8 @@ class LaneLines:
                 if lower_slope_threshold <= slope <= upper_slope_threshold:
                     right_lines.append(line)
 
-                if -upper_slope_threshold <= slope <= -lower_slope_threshold:
+                elif -upper_slope_threshold <= slope <= -lower_slope_threshold:
                     left_lines.append(line)
-
-        print("slopes =", sorted(slopes))
-        print(stats.mode(slopes))
 
         self.polyfit_line(left_lines, img, color, thickness)
         self.polyfit_line(right_lines, img, color, thickness)
@@ -199,26 +207,34 @@ class LaneLines:
         return cv2.addWeighted(initial_img, α, img, β, λ)
 
 
-ll = LaneLines()
-image = mpimg.imread("test_images/challenge/challenge0.jpg")
-processed_image = ll.process_image(image)
+def process_image(path):
+    ll = LaneLines()
+    image = mpimg.imread(path)
+    processed_image = ll.process_image(image)
+    plt.imshow(processed_image)
+    plt.show()
 
-plt.imshow(processed_image)
-plt.show()
+def process_video(video_file_name):
+    ll = LaneLines()
+    output = 'test_videos_output/' + video_file_name
+    clip = VideoFileClip("test_videos/" + video_file_name)
+    output_clip = clip.fl_image(ll.process_image)
+    output_clip.write_videofile(output, audio=False)
 
-# Solid White
-# white_output = 'test_videos_output/solidWhiteRight.mp4'
-# clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
-# white_clip = clip1.fl_image(ll.process_image)
-# white_clip.write_videofile(white_output, audio=False)
 
-# Solid Yellow
-# yellow_output = 'test_videos_output/solidYellowLeft.mp4'
-# clip2 = VideoFileClip("test_videos/solidYellowLeft.mp4")
-# yellow_clip = clip2.fl_image(ll.process_image)
-# yellow_clip.write_videofile(yellow_output, audio=False)
+# process_image("test_images/solidWhiteCurve.jpg")
+# process_image("test_images/solidWhiteRight.jpg")
+# process_image("test_images/solidYellowCurve.jpg")
+# process_image("test_images/solidYellowCurve2.jpg")
+# process_image("test_images/solidYellowLeft.jpg")
+process_image("test_images/challenge/challenge4.jpg") # <--- Fix this
 
-# Challenge
+
+# process_video("solidWhiteRight.mp4")
+# process_video("solidYellowLeft.mp4")
+# process_video("challenge.mp4")
+
+# ll = LaneLines()
 
 # challenge_output = 'test_videos_output/challenge.mp4'
 # clip3 = VideoFileClip("test_videos/challenge.mp4")
